@@ -14,54 +14,31 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR SMOOTH ANIMATIONS & STYLING ---
+# --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    /* Main background */
-    .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
-    }
-    
-    /* Smooth hover effect for buttons */
+    .stApp { background-color: #0E1117; color: #FAFAFA; }
     div.stButton > button:first-child {
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-        color: white;
-        border-radius: 10px;
-        border: none;
-        padding: 10px 24px;
+        color: white; border-radius: 10px; border: none; padding: 10px 24px;
         transition: all 0.3s ease-in-out;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    div.stButton > button:first-child:hover {
-        transform: translateY(-2px) scale(1.02);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.5);
-    }
-    
-    /* Card-like styling for inputs */
-    .css-1r6slb0, .css-12oz5g7 {
-        background-color: #1E2129;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-    
-    /* Headers */
-    h1, h2, h3 {
-        color: #4BA3E3;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
+    div.stButton > button:first-child:hover { transform: translateY(-2px) scale(1.02); }
+    h1, h2, h3 { color: #4BA3E3; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
 @st.cache_data
 def load_lottieurl(url: str):
-    """Loads a Lottie animation from a URL."""
-    r = requests.get(url)
-    if r.status_code != 200:
+    """Safely loads a Lottie animation."""
+    try:
+        r = requests.get(url)
+        if r.status_code != 200: 
+            return None
+        return r.json()
+    except:
         return None
-    return r.json()
 
 @st.cache_resource
 def load_model():
@@ -70,9 +47,14 @@ def load_model():
         return pickle.load(file)
 
 # --- LOAD ASSETS ---
-# Smooth futuristic animation for the header
 lottie_ai = load_lottieurl("https://lottie.host/8b7d27e7-3b95-46f9-90d0-4bd24687d69b/gX9T2Wj39T.json")
-model = load_model()
+
+try:
+    model = load_model()
+    model_loaded = True
+except Exception as e:
+    st.error(f"Failed to load model.pkl. Make sure the file is in the same folder as app.py. Error: {e}")
+    model_loaded = False
 
 # --- HEADER SECTION ---
 col1, col2 = st.columns([2, 1])
@@ -88,7 +70,6 @@ st.markdown("---")
 # --- USER INPUT SECTION ---
 st.subheader("📊 User Profile & Usage Metrics")
 
-# Layout columns for a cleaner UI
 left_col, mid_col, right_col = st.columns(3)
 
 with left_col:
@@ -104,10 +85,48 @@ with right_col:
     daily_hours = st.number_input("Daily Usage Hours", min_value=0.0, max_value=24.0, value=2.0, step=0.5)
     purpose = st.selectbox("Primary Purpose", ["Research", "Coding", "Writing", "General Query", "Entertainment"])
 
-# --- DATA ENCODING & PREPARATION ---
-# IMPORTANT: Update these dictionaries to match the exact numerical mapping used during your training phase!
+# --- DATA ENCODING DICTIONARY ---
+# Formatted safely to prevent SyntaxErrors
 mappings = {
     "gender": {"Male": 0, "Female": 1, "Other": 2},
     "education": {"High School": 0, "Undergraduate": 1, "Postgraduate": 2},
     "city": {"Tier 1": 0, "Tier 2": 1, "Tier 3": 2},
-    "ai_tool": {"ChatGPT": 0, "Claude": 1, "Gemini": 2, "Copilot": 3, "Other": 4}
+    "ai_tool": {"ChatGPT": 0, "Claude": 1, "Gemini": 2, "Copilot": 3, "Other": 4},
+    "purpose": {"Research": 0, "Coding": 1, "Writing": 2, "General Query": 3, "Entertainment": 4}
+}
+
+# --- PREDICTION LOGIC ---
+st.markdown("---")
+
+if model_loaded:
+    if st.button("🔮 Predict Impact"):
+        
+        # Structure the features exactly as the model expects
+        features = np.array([[
+            age,
+            mappings["gender"][gender],
+            mappings["education"][education_level],
+            mappings["city"][city],
+            mappings["ai_tool"][ai_tool],
+            daily_hours,
+            mappings["purpose"][purpose]
+        ]])
+        
+        with st.spinner('Analyzing patterns and crunching numbers...'):
+            time.sleep(1) # Artificial delay for smooth UX
+            
+            try:
+                prediction = model.predict(features)
+                predicted_class = prediction[0]
+                
+                st.markdown("### 🎯 Prediction Result")
+                if predicted_class == "High":
+                    st.success(f"**{predicted_class} Impact**! The AI usage is highly beneficial.")
+                    st.balloons()
+                elif predicted_class == "Medium":
+                    st.info(f"**{predicted_class} Impact**. Steady and balanced outcomes.")
+                else:
+                    st.warning(f"**{predicted_class} Impact**. Usage might need optimization for better results.")
+                    
+            except Exception as e:
+                st.error(f"An error occurred during prediction: {e}")
