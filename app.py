@@ -110,4 +110,4 @@ mappings = {
     "gender": {"Male": 0, "Female": 1, "Other": 2},
     "education": {"High School": 0, "Undergraduate": 1, "Postgraduate": 2},
     "city": {"Tier 1": 0, "Tier 2": 1, "Tier 3": 2},
-    "ai_tool": {"ChatGPT": 0, "Claude": 1, "Gemini": 2, "Copilot": 3, "Other": 4},
+    "ai_tool": {"ChatGPT": 0, "Claude": 1, "Gemini": 2, "Copilot": 3, "Other": 4}
