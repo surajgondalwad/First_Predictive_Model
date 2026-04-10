@@ -3,8 +3,14 @@ import pickle
 import pandas as pd
 import numpy as np
 import requests
-from streamlit_lottie import st_lottie
 import time
+import os
+
+# Optional Lottie import (safe)
+try:
+    from streamlit_lottie import st_lottie
+except:
+    st_lottie = None
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -31,10 +37,9 @@ st.markdown("""
 # --- HELPER FUNCTIONS ---
 @st.cache_data
 def load_lottieurl(url: str):
-    """Safely loads a Lottie animation."""
     try:
         r = requests.get(url)
-        if r.status_code != 200: 
+        if r.status_code != 200:
             return None
         return r.json()
     except:
@@ -42,51 +47,58 @@ def load_lottieurl(url: str):
 
 @st.cache_resource
 def load_model():
-    """Loads the pre-trained KNN model."""
-    with open('model.pkl', 'rb') as file:
-        return pickle.load(file)
+    try:
+        model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
+        with open(model_path, 'rb') as file:
+            return pickle.load(file)
+    except Exception as e:
+        return e
 
 # --- LOAD ASSETS ---
 lottie_ai = load_lottieurl("https://lottie.host/8b7d27e7-3b95-46f9-90d0-4bd24687d69b/gX9T2Wj39T.json")
 
-try:
-    model = load_model()
-    model_loaded = True
-except Exception as e:
-    st.error(f"Failed to load model.pkl. Make sure the file is in the same folder as app.py. Error: {e}")
+model = load_model()
+
+if isinstance(model, Exception):
+    st.error(f"❌ Failed to load model.pkl → {model}")
     model_loaded = False
+else:
+    model_loaded = True
 
 # --- HEADER SECTION ---
 col1, col2 = st.columns([2, 1])
+
 with col1:
     st.title("🚀 AI Impact Predictor")
-    st.write("Enter the user demographics and AI usage behavior below to predict the **Impact on Grades**.")
+    st.write("Enter user details to predict **Impact on Grades**.")
+
 with col2:
-    if lottie_ai:
-        st_lottie(lottie_ai, height=150, key="header_animation")
+    if lottie_ai and st_lottie:
+        st_lottie(lottie_ai, height=150)
+    else:
+        st.info("Animation not available")
 
 st.markdown("---")
 
-# --- USER INPUT SECTION ---
+# --- INPUT SECTION ---
 st.subheader("📊 User Profile & Usage Metrics")
 
 left_col, mid_col, right_col = st.columns(3)
 
 with left_col:
-    age = st.number_input("Age", min_value=10, max_value=100, value=20, step=1)
+    age = st.number_input("Age", 10, 100, 20)
     gender = st.selectbox("Gender", ["Male", "Female", "Other"])
     city = st.selectbox("City Tier", ["Tier 1", "Tier 2", "Tier 3"])
 
 with mid_col:
     education_level = st.selectbox("Education Level", ["High School", "Undergraduate", "Postgraduate"])
-    ai_tool = st.selectbox("Primary AI Tool Used", ["ChatGPT", "Claude", "Gemini", "Copilot", "Other"])
+    ai_tool = st.selectbox("Primary AI Tool", ["ChatGPT", "Claude", "Gemini", "Copilot", "Other"])
 
 with right_col:
-    daily_hours = st.number_input("Daily Usage Hours", min_value=0.0, max_value=24.0, value=2.0, step=0.5)
+    daily_hours = st.number_input("Daily Usage Hours", 0.0, 24.0, 2.0)
     purpose = st.selectbox("Primary Purpose", ["Research", "Coding", "Writing", "General Query", "Entertainment"])
 
-# --- DATA ENCODING DICTIONARY ---
-# Formatted safely to prevent SyntaxErrors
+# --- ENCODING ---
 mappings = {
     "gender": {"Male": 0, "Female": 1, "Other": 2},
     "education": {"High School": 0, "Undergraduate": 1, "Postgraduate": 2},
@@ -95,38 +107,49 @@ mappings = {
     "purpose": {"Research": 0, "Coding": 1, "Writing": 2, "General Query": 3, "Entertainment": 4}
 }
 
-# --- PREDICTION LOGIC ---
+# --- PREDICTION ---
 st.markdown("---")
 
 if model_loaded:
     if st.button("🔮 Predict Impact"):
-        
-        # Structure the features exactly as the model expects
-        features = np.array([[
-            age,
-            mappings["gender"][gender],
-            mappings["education"][education_level],
-            mappings["city"][city],
-            mappings["ai_tool"][ai_tool],
-            daily_hours,
-            mappings["purpose"][purpose]
-        ]])
-        
-        with st.spinner('Analyzing patterns and crunching numbers...'):
-            time.sleep(1) # Artificial delay for smooth UX
-            
+
+        # Create DataFrame (important fix)
+        features = pd.DataFrame([{
+            "age": age,
+            "gender": mappings["gender"][gender],
+            "education": mappings["education"][education_level],
+            "city": mappings["city"][city],
+            "ai_tool": mappings["ai_tool"][ai_tool],
+            "daily_hours": daily_hours,
+            "purpose": mappings["purpose"][purpose]
+        }])
+
+        # Label mapping fix
+        label_map = {0: "Low", 1: "Medium", 2: "High"}
+
+        with st.spinner("Analyzing data..."):
+            time.sleep(1)
+
             try:
                 prediction = model.predict(features)
-                predicted_class = prediction[0]
-                
+
+                # Handle numeric OR string output
+                raw_output = prediction[0]
+                predicted_class = label_map.get(raw_output, raw_output)
+
                 st.markdown("### 🎯 Prediction Result")
+
                 if predicted_class == "High":
-                    st.success(f"**{predicted_class} Impact**! The AI usage is highly beneficial.")
+                    st.success(f"✅ **High Impact** – AI usage is highly beneficial!")
                     st.balloons()
+
                 elif predicted_class == "Medium":
-                    st.info(f"**{predicted_class} Impact**. Steady and balanced outcomes.")
+                    st.info(f"ℹ️ **Medium Impact** – Balanced usage.")
+
                 else:
-                    st.warning(f"**{predicted_class} Impact**. Usage might need optimization for better results.")
-                    
+                    st.warning(f"⚠️ **Low Impact** – Try improving usage strategy.")
+
             except Exception as e:
-                st.error(f"An error occurred during prediction: {e}")
+                st.error(f"❌ Prediction error → {e}")
+else:
+    st.warning("⚠️ Model not loaded. Please fix model.pkl file.")
